@@ -21,6 +21,9 @@ productTypeFilter.addEventListener('change', (event) => {
     });
 });
 
+/**
+ * O Z garante que a data é interpretada como UTC, evitando problemas de fuso horário.
+ */
 const setDate = (strDate) => {
     if (!strDate) return "";
     const date = new Date(strDate + 'T00:00:00Z');
@@ -199,13 +202,14 @@ async function previewExtractedXML() {
             const asset = xmlNode.querySelector("asset");
             const product_type = getProducts(product);
             const { termsheet, finalPS, factSheet } = detectXmlType(xmlNode);
+            
             const cusip = findIdentifier(tradableForm, 'CUSIP');
             const isin = findIdentifier(tradableForm, 'ISIN');
-            const identifier = cusip || isin;
+            const identifier = cusip;
 
             if (!identifier) continue;
 
-            if (productMap.has(identifier)) { // Se existir ele da merge nos id
+            if (productMap.has(identifier)) {
                 const existingItem = productMap.get(identifier);
                 existingItem.termSheet = (existingItem.termSheet === 'Y' || termsheet === 'Y') ? 'Y' : 'N';
                 existingItem.finalPS   = (existingItem.finalPS === 'Y' || finalPS === 'Y') ? 'Y' : 'N';
@@ -248,6 +252,7 @@ async function previewExtractedXML() {
         renderTable(consolidatedData, maxAssets);
         message.innerHTML = "";
         btnExport.style.display = "inline-block";
+
     } catch (error) {
         console.error("An unexpected error occurred:", error);
         message.innerHTML = error.message || "An unexpected error occurred. Check the console for details.";
