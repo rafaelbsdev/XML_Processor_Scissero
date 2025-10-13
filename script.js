@@ -158,10 +158,6 @@ const getDetails = (productNode, type, tradableFormNode) => {
             return `Interest Barrier ${comparison} KI Barrier`;
     }
 };
-
-/**
- * @param {string} type ('CUSIP' ou 'ISIN').
- */
 const findIdentifier = (tradableFormNode, type) => {
     const identifiers = tradableFormNode.querySelectorAll('identifiers');
     for (const idNode of identifiers) {
@@ -188,7 +184,8 @@ async function previewExtractedXML() {
     btnPreview.disabled = true;
 
     try {
-        const extractedData = [];
+        const productMap = new Map();
+
         for (const file of files) {
             const parser = new DOMParser();
             const content = await file.text();
@@ -202,41 +199,53 @@ async function previewExtractedXML() {
             const asset = xmlNode.querySelector("asset");
             const product_type = getProducts(product);
             const { termsheet, finalPS, factSheet } = detectXmlType(xmlNode);
-            
             const cusip = findIdentifier(tradableForm, 'CUSIP');
             const isin = findIdentifier(tradableForm, 'ISIN');
+            const identifier = cusip || isin;
 
-            const item = {
-                prodCusip: cusip,
-                prodIsin: isin,
-                underlyingAssetType: getUnderlying(asset),
-                assets: Array.from(asset.querySelectorAll("assets")).map(node => findFirstContent(node, ["bloombergTickerSuffix"])),
-                productType: product_type,
-                productClient: detectClient(xmlNode),
-                productTenor: getProducts(product, "tenor"),
-                couponFrequency: getCoupon(product, "frequency"),
-                couponBarrierLevel: getCoupon(product, "level"),
-                couponMemory: getCoupon(product, "memory"),
-                upsideCap: (product_type === "BREN" || product_type === "REN") ? upsideCap(product) : "N/A",
-                upsideLeverage: (product_type === "BREN" || product_type === "REN") ? upsideLeverage(product) : "N/A",
-                detailBufferKIBarrier: getDetails(product, "strikelevel"),
-                detailBufferBarrierLevel: getDetails(product, "bufferlevel"),
-                detailFrequency: getDetails(product, "frequency", tradableForm),
-                detailNonCallPerid: getDetails(product, "noncall", tradableForm),
-                detailInterestBarrierTriggerValue: getDetails(product),
-                dateBookingStrikeDate: setDate(findFirstContent(xmlNode, ["securitized > issuance > prospectusStartDate", "strikeDate > date"])),
-                dateBookingPricingDate: setDate(findFirstContent(tradableForm, ["securitized > issuance > clientOrderTradeDate"])),
-                maturityDate: setDate(findFirstContent(product, ["redemptionDate", "settlementDate"])),
-                valuationDate: setDate(findFirstContent(product, ["finalObservation"])),
-                earlyStrike: getEarlyStrike(xmlNode),
-                termSheet: termsheet,
-                finalPS: finalPS,
-                factSheet: factSheet,
-            };
-            extractedData.push(item);
+            if (!identifier) continue;
+
+            if (productMap.has(identifier)) { // Se existir ele da merge nos id
+                const existingItem = productMap.get(identifier);
+                existingItem.termSheet = (existingItem.termSheet === 'Y' || termsheet === 'Y') ? 'Y' : 'N';
+                existingItem.finalPS   = (existingItem.finalPS === 'Y' || finalPS === 'Y') ? 'Y' : 'N';
+                existingItem.factSheet = (existingItem.factSheet === 'Y' || factSheet === 'Y') ? 'Y' : 'N';
+            } else {
+                const item = {
+                    prodCusip: cusip,
+                    prodIsin: isin,
+                    underlyingAssetType: getUnderlying(asset),
+                    assets: Array.from(asset.querySelectorAll("assets")).map(node => findFirstContent(node, ["bloombergTickerSuffix"])),
+                    productType: product_type,
+                    productClient: detectClient(xmlNode),
+                    productTenor: getProducts(product, "tenor"),
+                    couponFrequency: getCoupon(product, "frequency"),
+                    couponBarrierLevel: getCoupon(product, "level"),
+                    couponMemory: getCoupon(product, "memory"),
+                    upsideCap: (product_type === "BREN" || product_type === "REN") ? upsideCap(product) : "N/A",
+                    upsideLeverage: (product_type === "BREN" || product_type === "REN") ? upsideLeverage(product) : "N/A",
+                    detailBufferKIBarrier: getDetails(product, "strikelevel"),
+                    detailBufferBarrierLevel: getDetails(product, "bufferlevel"),
+                    detailFrequency: getDetails(product, "frequency", tradableForm),
+                    detailNonCallPerid: getDetails(product, "noncall", tradableForm),
+                    detailInterestBarrierTriggerValue: getDetails(product),
+                    dateBookingStrikeDate: setDate(findFirstContent(xmlNode, ["securitized > issuance > prospectusStartDate", "strikeDate > date"])),
+                    dateBookingPricingDate: setDate(findFirstContent(tradableForm, ["securitized > issuance > clientOrderTradeDate"])),
+                    maturityDate: setDate(findFirstContent(product, ["redemptionDate", "settlementDate"])),
+                    valuationDate: setDate(findFirstContent(product, ["finalObservation"])),
+                    earlyStrike: getEarlyStrike(xmlNode),
+                    termSheet: termsheet,
+                    finalPS: finalPS,
+                    factSheet: factSheet,
+                };
+                productMap.set(identifier, item);
+            }
         }
-        const maxAssets = extractedData.reduce((max, item) => Math.max(max, item.assets.length), 0);
-        renderTable(extractedData, maxAssets);
+
+        const consolidatedData = Array.from(productMap.values());
+
+        const maxAssets = consolidatedData.reduce((max, item) => Math.max(max, item.assets.length), 0);
+        renderTable(consolidatedData, maxAssets);
         message.innerHTML = "";
         btnExport.style.display = "inline-block";
     } catch (error) {
@@ -283,7 +292,7 @@ function renderTable(data, maxAssets) {
         { title: "Product Details", children: ["Product Type", "Client", "Tenor"] },
         { title: "Coupons", children: ["Frequency", "Barrier Level", "Memory"] },
         { title: "Details", children: ["Upside Cap", "Upside Leverage", "Buffer Threshold / KI Barrier", "Barrier/Buffer Level", "Frequency", "Non-call period", "Interest Barrier vs KI"] },
-        { title: "Dates in Bookings", children: ["Strike", "Pricing", "Maturity", "Valuation", "Early Strike"] },
+        { title: "DATES IN BOOKINGS", children: ["Strike", "Pricing", "Maturity", "Valuation", "Early Strike"] },
         { title: "Doc Type", children: ["Term Sheet", "Final PS", "Fact Sheet"] }
     ];
 
