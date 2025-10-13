@@ -5,6 +5,10 @@ const btnPreview = document.querySelector(".btnPreviewData");
 const btnExport = document.querySelector(".btnExportExcel");
 const productTypeFilter = document.getElementById('productTypeFilter');
 
+let consolidatedData = [];
+let headerStructure = [];
+let maxAssetsForExport = 0;
+
 btnPreview.addEventListener("click", previewExtractedXML);
 btnExport.addEventListener("click", exportExcel);
 
@@ -21,18 +25,13 @@ productTypeFilter.addEventListener('change', (event) => {
     });
 });
 
-/**
- * O Z garante que a data é interpretada como UTC, evitando problemas de fuso horário.
- */
 const setDate = (strDate) => {
     if (!strDate) return "";
     const date = new Date(strDate + 'T00:00:00Z');
     if (isNaN(date.getTime())) return "";
-
     const day = date.getUTCDate().toString().padStart(2, '0');
     const month = date.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' });
     const year = date.getUTCFullYear().toString().slice(-2);
-    
     return `${day}-${month}-${year}`;
 };
 
@@ -57,6 +56,10 @@ const findFirstContent = (node, selectors) => {
         }
     }
     return "";
+};
+
+const sanitizeSheetName = (name) => {
+    return name.replace(/[\\/*?\[\]:]/g, "").substring(0, 31);
 };
 
 const getUnderlying = (assetNode, key) => {
@@ -246,10 +249,10 @@ async function previewExtractedXML() {
             }
         }
 
-        const consolidatedData = Array.from(productMap.values());
+        consolidatedData = Array.from(productMap.values());
 
-        const maxAssets = consolidatedData.reduce((max, item) => Math.max(max, item.assets.length), 0);
-        renderTable(consolidatedData, maxAssets);
+        maxAssetsForExport = consolidatedData.reduce((max, item) => Math.max(max, item.assets.length), 0);
+        renderTable(consolidatedData, maxAssetsForExport);
         message.innerHTML = "";
         btnExport.style.display = "inline-block";
 
@@ -290,7 +293,7 @@ function renderTable(data, maxAssets) {
         assetHeaders = Array.from({ length: maxAssets }, (_, i) => `Asset ${i + 1}`);
     }
     
-    const headers = [
+    headerStructure = [
         { title: "Prod CUSIP" },
         { title: "ISIN" },
         { title: "Underlying", children: ["Asset Type", ...assetHeaders] },
@@ -302,12 +305,12 @@ function renderTable(data, maxAssets) {
     ];
 
     let htmlTable = "<table><thead><tr class='first-tr'>";
-    headers.forEach(({ title, children }) => {
+    headerStructure.forEach(({ title, children }) => {
         const span = children ? `colspan="${children.length}" class="category"` : `rowspan="2"`;
         htmlTable += `<th ${span}>${title.toUpperCase()}</th>`;
     });
     htmlTable += "</tr><tr class='second-tr'>";
-    headers.forEach(({ children }) => {
+    headerStructure.forEach(({ children }) => {
         if (children) children.forEach(child => (htmlTable += `<th>${child}</th>`));
     });
     htmlTable += "</tr></thead><tbody>";
@@ -347,46 +350,114 @@ function renderTable(data, maxAssets) {
 }
 
 function exportExcel() {
-    const originalTable = dataTable.querySelector("table");
-    if (!originalTable) {
-        message.innerHTML = "There is no data to export.";
+    const selectedType = productTypeFilter.value;
+    let filteredData = consolidatedData;
+
+    if (selectedType !== 'all') {
+        filteredData = consolidatedData.filter(row => row.productType === selectedType);
+    }
+
+    if (filteredData.length === 0) {
+        message.innerHTML = "No data to export for the selected filter.";
         return;
     }
-    const tempTable = document.createElement('table');
-    const thead = originalTable.querySelector('thead');
-    if (thead) {
-        tempTable.appendChild(thead.cloneNode(true));
-    }
-    const visibleRows = originalTable.querySelectorAll('tbody tr:not([style*="display: none"])');
-    const tbody = document.createElement('tbody');
-    visibleRows.forEach(row => {
-        tbody.appendChild(row.cloneNode(true));
-    });
-    tempTable.appendChild(tbody);
+
+    const groupedData = filteredData.reduce((acc, row) => {
+        const key = row.productType || 'Uncategorized';
+        if (!acc[key]) acc[key] = [];
+        acc[key].push(row);
+        return acc;
+    }, {});
+
     const workbook = XLSX.utils.book_new();
-    const worksheet = XLSX.utils.table_to_sheet(tempTable);
-    const colWidths = [];
-    for (const cellAddress in worksheet) {
-        if (cellAddress[0] === '!') continue;
-        const cell = XLSX.utils.decode_cell(cellAddress);
-        worksheet[cellAddress].s = {
-            font: { name: "Arial", sz: 10 },
-            alignment: { vertical: "top", horizontal: "left" },
-            border: { top: { style: "thin", color: "000000" }, right: { style: "thin", color: "000000" }, bottom: { style: "thin", color: "000000" }, left: { style: "thin", color: "000000" } }
-        };
-        if (cell.r < 2) {
-            worksheet[cellAddress].s.font.bold = true;
-            worksheet[cellAddress].s.alignment.horizontal = "center";
-            worksheet[cellAddress].s.fill = { fgColor: { rgb: "DDEBF7" } };
-        }
-        const value = worksheet[cellAddress].v;
-        const width = value ? value.toString().length + 2 : 12;
-        if (!colWidths[cell.c] || width > colWidths[cell.c].wch) {
-            colWidths[cell.c] = { wch: width };
-        }
+
+    const orderedKeys = [
+        "prodCusip", "prodIsin", "underlyingAssetType", 
+        ...Array.from({ length: maxAssetsForExport }, (_, i) => `asset_${i}`),
+        "productType", "productClient", "productTenor", "couponFrequency",
+        "couponBarrierLevel", "couponMemory", "upsideCap", "upsideLeverage",
+        "detailBufferKIBarrier", "detailBufferBarrierLevel", "detailFrequency",
+        "detailNonCallPerid", "detailInterestBarrierTriggerValue", "dateBookingStrikeDate",
+        "dateBookingPricingDate", "maturityDate", "valuationDate", "earlyStrike",
+        "termSheet", "finalPS", "factSheet"
+    ];
+
+    for (const productType in groupedData) {
+        const sheetData = groupedData[productType];
+        const sheetName = sanitizeSheetName(productType);
+
+        const headerRow1 = [];
+        const headerRow2 = [];
+        headerStructure.forEach(h => {
+            headerRow1.push(h.title.toUpperCase());
+            if (h.children) {
+                headerRow2.push(...h.children);
+                for (let i = 1; i < h.children.length; i++) {
+                    headerRow1.push(null);
+                }
+            } else {
+                headerRow2.push(null);
+            }
+        });
+
+        const dataAoA = sheetData.map(row => {
+            const rowAsArray = [];
+            rowAsArray.push(row.prodCusip, row.prodIsin, row.underlyingAssetType);
+            for (let i = 0; i < maxAssetsForExport; i++) {
+                rowAsArray.push(row.assets[i] || "");
+            }
+            rowAsArray.push(
+                row.productType, row.productClient, row.productTenor, row.couponFrequency,
+                row.couponBarrierLevel, row.couponMemory, row.upsideCap, row.upsideLeverage,
+                row.detailBufferKIBarrier, row.detailBufferBarrierLevel, row.detailFrequency,
+                row.detailNonCallPerid, row.detailInterestBarrierTriggerValue, row.dateBookingStrikeDate,
+                row.dateBookingPricingDate, row.maturityDate, row.valuationDate, row.earlyStrike,
+                row.termSheet, row.finalPS, row.factSheet
+            );
+            return rowAsArray;
+        });
+
+        const worksheet = XLSX.utils.aoa_to_sheet([headerRow1, headerRow2, ...dataAoA]);
+
+        const merges = [];
+        let colIndex = 0;
+        headerStructure.forEach(header => {
+            if (header.children) {
+                if (header.children.length > 1) {
+                    merges.push({ s: { r: 0, c: colIndex }, e: { r: 0, c: colIndex + header.children.length - 1 } });
+                }
+                colIndex += header.children.length;
+            } else {
+                merges.push({ s: { r: 0, c: colIndex }, e: { r: 1, c: colIndex } });
+                colIndex++;
+            }
+        });
+        worksheet['!merges'] = merges;
+        
+        const colWidths = [];
+        Object.keys(worksheet).forEach(cellAddress => {
+            if (cellAddress[0] === '!') return;
+            const cell = XLSX.utils.decode_cell(cellAddress);
+            worksheet[cellAddress].s = {
+                font: { name: "Arial", sz: 10 },
+                alignment: { vertical: "center", horizontal: "left" },
+                border: { top: { style: "thin" }, right: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" } }
+            };
+            if (cell.r < 2) {
+                worksheet[cellAddress].s.font.bold = true;
+                worksheet[cellAddress].s.alignment.horizontal = "center";
+                worksheet[cellAddress].s.fill = { fgColor: { rgb: "DDEBF7" } };
+            }
+            const value = worksheet[cellAddress].v;
+            const width = value ? value.toString().length + 2 : 12;
+            if (!colWidths[cell.c] || width > colWidths[cell.c].wch) {
+                colWidths[cell.c] = { wch: width };
+            }
+        });
+        worksheet['!cols'] = colWidths;
+
+        XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
     }
-    worksheet['!cols'] = colWidths;
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Scenario List");
     
     XLSX.writeFile(workbook, "ExtractedXML_Data.xlsx");
 }
