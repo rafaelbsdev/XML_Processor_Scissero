@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>SmartDX Scenario Extractor</title>
+  
+  <link rel="stylesheet" href="style.css">
+  
+  <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.min.js"></script>
+</head>
+
+<body>
+  <div class="wrap">
+    <h1>SmartDX Scenario Extractor — XML ➜ Scenario List</h1>
+    <div class="panel">
+      <div class="fields">
+        <input type="file" class="inputXML" multiple accept=".xml" />
+        
+        <div class="filter-container" style="display: none;">
+          <label for="productTypeFilter" style="margin-left: 10px;">Filter by Type:</label>
+          <select id="productTypeFilter" class="custom-select"></select>
+        </div>
+
+        <button class="btnPreviewData">
+          Preview Data
+        </button>
+        <button class="btnExportExcel" style="display: none;">
+          Export Excel
+        </button>
+      </div>
+
+      <div class="message"></div>
+      
+      <div class="dataTable"></div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+
+</html>

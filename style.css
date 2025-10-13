@@ -1,0 +1,152 @@
+body {
+  margin: 0;
+  height: 100%;
+  background: #0b1220;
+  color: #e5e7eb;
+  font: 14px / 1.45 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+}
+
+.panel {
+  background: #131b2f;
+  border-radius: 14px;
+  padding: 16px 16px 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .25);
+}
+
+.wrap {
+  max-width: 1200px;
+  margin: 24px auto;
+  padding: 0 16px;
+}
+
+.fields {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  padding-bottom: 20px;
+}
+
+.btnPreviewData {
+  background: #6ee7b7;
+  color: #052e2b;
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+input[type=file] {
+  display: block;
+  background: #0f172a;
+  border: 1px solid #1f2937;
+  padding: 10px;
+  border-radius: 10px;
+  color: #d1d5db;
+}
+
+.btnExportExcel {
+  background: #0f172a;
+  color: #d1d5db;
+  border: 1px solid #1f2937;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button {
+  cursor: pointer;
+}
+
+.message {
+  color: #e57373;
+  font-size: large;
+  padding-bottom: 10px;
+}
+
+.dataTable {
+  max-height: 600px;
+  overflow-y: auto;
+  overflow-x: auto;
+  padding-bottom: 20px;
+}
+
+.dataTable::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.dataTable::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 5px;
+}
+
+.dataTable::-webkit-scrollbar-track {
+  background: #3b4252;
+}
+
+table {
+  box-sizing: border-box;
+  text-indent: initial;
+  border-collapse: separate;
+  margin: 0;
+  margin-top: -2px;
+  margin-left: -2px;
+  border-spacing: 0;
+}
+
+thead {
+  display: table-header-group;
+  vertical-align: middle;
+  border-color: inherit;
+  position: sticky;
+  top: 0;
+  background-color: black;
+  z-index: 100;
+}
+
+tbody {
+  position: relative;
+  z-index: 1;
+}
+
+th,
+td {
+  padding: 10px 12px;
+  background: #0f172a;
+  white-space: nowrap;
+  border: 1px solid #223049;
+}
+
+th {
+  top: 0;
+  background: #0b1220;
+  border-color: #223049;
+  border-bottom: 1px solid #223049;
+}
+
+tbody tr:hover td {
+  background-color: #5d6774;
+}
+
+th.category {
+  text-align: center;
+}
+
+.first-tr th:first-child,
+td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+}
+
+.custom-select {
+  background: #0f172a;
+  color: #d1d5db;
+  border: 1px solid #1f2937;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-weight: 600;
+}
