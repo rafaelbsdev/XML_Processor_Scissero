@@ -71,6 +71,7 @@ const getUnderlying = (assetNode, key) => {
         return assets.length === 1 ? `Single ${assetType}` : `${basketType} ${assetType}`;
     }
 };
+
 const getProducts = (productNode, type) => {
     if (type === "tenor") {
         const tenorMonths = findFirstContent(productNode, ["tenor > months"]);
@@ -80,14 +81,17 @@ const getProducts = (productNode, type) => {
     }
     return findFirstContent(productNode, ["bufferedReturnEnhancedNote > productType", "reverseConvertible > description", "productName"]);
 };
+
 const upsideLeverage = (productNode) => {
     const leverage = findFirstContent(productNode, ["bufferedReturnEnhancedNote > upsideLeverage"]);
     return (leverage && `${leverage}X`) || "N/A";
 };
+
 const upsideCap = (productNode) => {
     const cap = findFirstContent(productNode, ["bufferedReturnEnhancedNote > upsideCap"]);
     return (cap && `${cap}%`) || "N/A";
 };
+
 const getCoupon = (productNode, type) => {
     const couponSchedule = productNode.querySelector("reverseConvertible > couponSchedule");
     if (!couponSchedule) return "N/A";
@@ -102,11 +106,13 @@ const getCoupon = (productNode, type) => {
         default: return "N/A";
     }
 };
+
 const getEarlyStrike = (xmlNode) => {
     const strikeRaw = findFirstContent(xmlNode, ["securitized > issuance > prospectusStartDate", "strikeDate > date"]);
     const pricingRaw = findFirstContent(xmlNode, ["securitized > issuance > clientOrderTradeDate"]);
     return strikeRaw && pricingRaw && strikeRaw !== pricingRaw ? "Y" : "N";
 };
+
 const detectClient = (xmlNode) => {
     const cp = findFirstContent(xmlNode, ["counterparty > name"]);
     const dealer = findFirstContent(xmlNode, ["dealer > name"]);
@@ -116,6 +122,7 @@ const detectClient = (xmlNode) => {
     if (blob.includes("bauble") || blob.includes("ubs")) return "UBS";
     return "3P";
 };
+
 const detectXmlType = (xmlNode) => {
     const docType = findFirstContent(xmlNode, ["documentType"]).toUpperCase();
     return {
@@ -124,6 +131,7 @@ const detectXmlType = (xmlNode) => {
         factSheet: docType.includes("FACT_SHEET") ? "Y" : "N",
     };
 };
+
 const getDetails = (productNode, type, tradableFormNode) => {
     const productType = getProducts(productNode);
     if (productType === "BREN" || productType === "REN") {
@@ -162,6 +170,7 @@ const getDetails = (productNode, type, tradableFormNode) => {
             return `Interest Barrier ${comparison} KI Barrier`;
     }
 };
+
 const findIdentifier = (tradableFormNode, type) => {
     const identifiers = tradableFormNode.querySelectorAll('identifiers');
     for (const idNode of identifiers) {
@@ -286,7 +295,12 @@ function renderTable(data, maxAssets) {
             productTypeFilter.appendChild(option);
         }
     });
-    filterContainer.style.display = 'inline-block';
+    
+    if(productTypes.length > 1){
+        filterContainer.style.display = 'inline-block';
+    }else{
+        filterContainer.style.display = 'none';
+    }
     
     let assetHeaders;
     if (maxAssets === 1) {
@@ -308,7 +322,8 @@ function renderTable(data, maxAssets) {
         { title: "Underlying", children: ["Asset Type", ...assetHeaders] },
         { title: "Product Details", children: ["Product Type", "Client", "Tenor"] },
         { title: "Coupons", children: ["Frequency", "Barrier Level", "Memory"] },
-        { title: "Details", children: detailsChildren },
+        { title: "Details", children: ["Upside Cap", "Upside Leverage", "Buffer Threshold / KI Barrier", "Barrier/Buffer Level", "Interest Barrier vs KI"] },
+        { title: "Call", children: ["Frequency", "Non-call period"] },
         { title: "DATES IN BOOKINGS", children: ["Strike", "Pricing", "Maturity", "Valuation", "Early Strike"] },
         { title: "Doc Type", children: ["Term Sheet", "Final PS", "Fact Sheet"] }
     ];
@@ -344,9 +359,9 @@ function renderTable(data, maxAssets) {
         }
         htmlTable += `<td>${row.detailBufferKIBarrier || ""}</td>`;
         htmlTable += `<td>${row.detailBufferBarrierLevel || ""}</td>`;
+        htmlTable += `<td>${row.detailInterestBarrierTriggerValue || ""}</td>`;
         htmlTable += `<td>${row.detailFrequency || ""}</td>`;
         htmlTable += `<td>${row.detailNonCallPerid || ""}</td>`;
-        htmlTable += `<td>${row.detailInterestBarrierTriggerValue || ""}</td>`;
         htmlTable += `<td>${row.dateBookingStrikeDate || ""}</td>`;
         htmlTable += `<td>${row.dateBookingPricingDate || ""}</td>`;
         htmlTable += `<td>${row.maturityDate || ""}</td>`;
@@ -385,6 +400,17 @@ function exportExcel() {
 
     const workbook = XLSX.utils.book_new();
 
+    const orderedKeys = [
+        "prodCusip", "prodIsin", "underlyingAssetType", 
+        ...Array.from({ length: maxAssetsForExport }, (_, i) => `asset_${i}`),
+        "productType", "productClient", "productTenor", "couponFrequency",
+        "couponBarrierLevel", "couponMemory", "upsideCap", "upsideLeverage",
+        "detailBufferKIBarrier", "detailBufferBarrierLevel",  "detailInterestBarrierTriggerValue",
+        "detailFrequency", "detailNonCallPerid", "dateBookingStrikeDate",
+        "dateBookingPricingDate", "maturityDate", "valuationDate", "earlyStrike",
+        "termSheet", "finalPS", "factSheet"
+    ];
+
     for (const productType in groupedData) {
         const sheetData = groupedData[productType];
         const sheetName = sanitizeSheetName(productType);
@@ -422,15 +448,9 @@ function exportExcel() {
             }
             rowAsArray.push(
                 row.productType, row.productClient, row.productTenor, row.couponFrequency,
-                row.couponBarrierLevel, row.couponMemory, row.upsideCap, row.upsideLeverage
-            );
-            if (isBrenRenSheet) {
-                rowAsArray.push(row.detailCappedUncapped);
-            } else if (hasBrenRenProductsInExport) {
-            }
-            const remainingData = [
-                row.detailBufferKIBarrier, row.detailBufferBarrierLevel, row.detailFrequency,
-                row.detailNonCallPerid, row.detailInterestBarrierTriggerValue, row.dateBookingStrikeDate,
+                row.couponBarrierLevel, row.couponMemory, row.upsideCap, row.upsideLeverage,
+                row.detailBufferKIBarrier, row.detailBufferBarrierLevel, row.detailInterestBarrierTriggerValue,
+                row.detailFrequency, row.detailNonCallPerid, row.dateBookingStrikeDate,
                 row.dateBookingPricingDate, row.maturityDate, row.valuationDate, row.earlyStrike,
                 row.termSheet, row.finalPS, row.factSheet
             ];
