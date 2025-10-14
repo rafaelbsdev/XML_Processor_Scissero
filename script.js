@@ -45,8 +45,6 @@ const uniqueArray = (array, objKey) => {
     return [...uniqValues];
 };
 
-const setBuffer = (value) => 100 - parseFloat(value);
-
 const findFirstContent = (node, selectors) => {
     if (!node) return "";
     for (const selector of selectors) {
@@ -212,6 +210,8 @@ async function previewExtractedXML() {
 
             if (!identifier) continue;
 
+            const cappedValue = findFirstContent(product, ['bufferedReturnEnhancedNote > capped', 'capped']);
+
             if (productMap.has(identifier)) {
                 const existingItem = productMap.get(identifier);
                 existingItem.termSheet = (existingItem.termSheet === 'Y' || termsheet === 'Y') ? 'Y' : 'N';
@@ -229,8 +229,11 @@ async function previewExtractedXML() {
                     couponFrequency: getCoupon(product, "frequency"),
                     couponBarrierLevel: getCoupon(product, "level"),
                     couponMemory: getCoupon(product, "memory"),
-                    upsideCap: (product_type === "BREN" || product_type === "REN") ? upsideCap(product) : "N/A",
-                    upsideLeverage: (product_type === "BREN" || product_type === "REN") ? upsideLeverage(product) : "N/A",
+                    upsideCap: upsideCap(product),
+                    upsideLeverage: upsideLeverage(product),
+                    detailCappedUncapped: (product_type === 'BREN' || product_type === 'REN')
+                        ? (cappedValue === 'true' ? 'Capped' : (cappedValue === 'false' ? 'Uncapped' : ''))
+                        : '',
                     detailBufferKIBarrier: getDetails(product, "strikelevel"),
                     detailBufferBarrierLevel: getDetails(product, "bufferlevel"),
                     detailFrequency: getDetails(product, "frequency", tradableForm),
@@ -238,8 +241,8 @@ async function previewExtractedXML() {
                     detailInterestBarrierTriggerValue: getDetails(product),
                     dateBookingStrikeDate: setDate(findFirstContent(xmlNode, ["securitized > issuance > prospectusStartDate", "strikeDate > date"])),
                     dateBookingPricingDate: setDate(findFirstContent(tradableForm, ["securitized > issuance > clientOrderTradeDate"])),
-                    maturityDate: setDate(findFirstContent(product, ["redemptionDate", "settlementDate"])),
-                    valuationDate: setDate(findFirstContent(product, ["finalObservation"])),
+                    maturityDate: setDate(findFirstContent(product, ["maturity > date", "redemptionDate", "settlementDate"])),
+                    valuationDate: setDate(findFirstContent(product, ["finalObsDate > date", "finalObservation"])),
                     earlyStrike: getEarlyStrike(xmlNode),
                     termSheet: termsheet,
                     finalPS: finalPS,
@@ -250,7 +253,6 @@ async function previewExtractedXML() {
         }
 
         consolidatedData = Array.from(productMap.values());
-
         maxAssetsForExport = consolidatedData.reduce((max, item) => Math.max(max, item.assets.length), 0);
         renderTable(consolidatedData, maxAssetsForExport);
         message.innerHTML = "";
@@ -293,13 +295,20 @@ function renderTable(data, maxAssets) {
         assetHeaders = Array.from({ length: maxAssets }, (_, i) => `Asset ${i + 1}`);
     }
     
+    const hasBrenRenProducts = data.some(row => row.productType === 'BREN' || row.productType === 'REN');
+    
+    const detailsChildren = ["Upside Cap", "Upside Leverage"];
+    if (hasBrenRenProducts) {
+        detailsChildren.push("Capped / Uncapped");
+    }
+    detailsChildren.push("Buffer Threshold / KI Barrier", "Barrier/Buffer Level", "Frequency", "Non-call period", "Interest Barrier vs KI");
+
     headerStructure = [
-        { title: "Prod CUSIP" },
-        { title: "ISIN" },
+        { title: "Prod CUSIP" }, { title: "ISIN" },
         { title: "Underlying", children: ["Asset Type", ...assetHeaders] },
         { title: "Product Details", children: ["Product Type", "Client", "Tenor"] },
         { title: "Coupons", children: ["Frequency", "Barrier Level", "Memory"] },
-        { title: "Details", children: ["Upside Cap", "Upside Leverage", "Buffer Threshold / KI Barrier", "Barrier/Buffer Level", "Frequency", "Non-call period", "Interest Barrier vs KI"] },
+        { title: "Details", children: detailsChildren },
         { title: "DATES IN BOOKINGS", children: ["Strike", "Pricing", "Maturity", "Valuation", "Early Strike"] },
         { title: "Doc Type", children: ["Term Sheet", "Final PS", "Fact Sheet"] }
     ];
@@ -330,6 +339,9 @@ function renderTable(data, maxAssets) {
         htmlTable += `<td>${row.couponMemory || ""}</td>`;
         htmlTable += `<td>${row.upsideCap || ""}</td>`;
         htmlTable += `<td>${row.upsideLeverage || ""}</td>`;
+        if (hasBrenRenProducts) {
+            htmlTable += `<td>${row.detailCappedUncapped || ""}</td>`;
+        }
         htmlTable += `<td>${row.detailBufferKIBarrier || ""}</td>`;
         htmlTable += `<td>${row.detailBufferBarrierLevel || ""}</td>`;
         htmlTable += `<td>${row.detailFrequency || ""}</td>`;
@@ -362,6 +374,8 @@ function exportExcel() {
         return;
     }
 
+    const hasBrenRenProductsInExport = filteredData.some(row => row.productType === 'BREN' || row.productType === 'REN');
+
     const groupedData = filteredData.reduce((acc, row) => {
         const key = row.productType || 'Uncategorized';
         if (!acc[key]) acc[key] = [];
@@ -371,24 +385,22 @@ function exportExcel() {
 
     const workbook = XLSX.utils.book_new();
 
-    const orderedKeys = [
-        "prodCusip", "prodIsin", "underlyingAssetType", 
-        ...Array.from({ length: maxAssetsForExport }, (_, i) => `asset_${i}`),
-        "productType", "productClient", "productTenor", "couponFrequency",
-        "couponBarrierLevel", "couponMemory", "upsideCap", "upsideLeverage",
-        "detailBufferKIBarrier", "detailBufferBarrierLevel", "detailFrequency",
-        "detailNonCallPerid", "detailInterestBarrierTriggerValue", "dateBookingStrikeDate",
-        "dateBookingPricingDate", "maturityDate", "valuationDate", "earlyStrike",
-        "termSheet", "finalPS", "factSheet"
-    ];
-
     for (const productType in groupedData) {
         const sheetData = groupedData[productType];
         const sheetName = sanitizeSheetName(productType);
-
+        
+        let localHeaderStructure = JSON.parse(JSON.stringify(headerStructure));
+        const isBrenRenSheet = productType === 'BREN' || productType === 'REN';
+        if (hasBrenRenProductsInExport && !isBrenRenSheet) {
+            const details = localHeaderStructure.find(h => h.title === 'Details');
+            if (details) {
+                details.children = details.children.filter(c => c !== 'Capped / Uncapped');
+            }
+        }
+        
         const headerRow1 = [];
         const headerRow2 = [];
-        headerStructure.forEach(h => {
+        localHeaderStructure.forEach(h => {
             headerRow1.push(h.title.toUpperCase());
             if (h.children) {
                 headerRow2.push(...h.children);
@@ -408,7 +420,12 @@ function exportExcel() {
             }
             rowAsArray.push(
                 row.productType, row.productClient, row.productTenor, row.couponFrequency,
-                row.couponBarrierLevel, row.couponMemory, row.upsideCap, row.upsideLeverage,
+                row.couponBarrierLevel, row.couponMemory, row.upsideCap, row.upsideLeverage
+            );
+            if (hasBrenRenProductsInExport) {
+                rowAsArray.push(row.detailCappedUncapped);
+            }
+            rowAsArray.push(
                 row.detailBufferKIBarrier, row.detailBufferBarrierLevel, row.detailFrequency,
                 row.detailNonCallPerid, row.detailInterestBarrierTriggerValue, row.dateBookingStrikeDate,
                 row.dateBookingPricingDate, row.maturityDate, row.valuationDate, row.earlyStrike,
@@ -421,7 +438,7 @@ function exportExcel() {
 
         const merges = [];
         let colIndex = 0;
-        headerStructure.forEach(header => {
+        localHeaderStructure.forEach(header => {
             if (header.children) {
                 if (header.children.length > 1) {
                     merges.push({ s: { r: 0, c: colIndex }, e: { r: 0, c: colIndex + header.children.length - 1 } });
