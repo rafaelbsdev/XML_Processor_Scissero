@@ -112,7 +112,6 @@ const getEarlyStrike = (xmlNode) => {
     const pricingRaw = findFirstContent(xmlNode, ["securitized > issuance > clientOrderTradeDate"]);
     return strikeRaw && pricingRaw && strikeRaw !== pricingRaw ? "Y" : "N";
 };
-
 const detectClient = (xmlNode) => {
     const cp = findFirstContent(xmlNode, ["counterparty > name"]);
     const dealer = findFirstContent(xmlNode, ["dealer > name"]);
@@ -144,6 +143,7 @@ const getDetails = (productNode, type, tradableFormNode) => {
             case "noncall": return "N/A";
         }
     }
+
     const phoenixType = productNode.querySelector("reverseConvertible > issuerCallable") ? "issuerCallable" : "autocallSchedule";
     switch (type) {
         case "strikelevel":
@@ -295,12 +295,7 @@ function renderTable(data, maxAssets) {
             productTypeFilter.appendChild(option);
         }
     });
-    
-    if(productTypes.length > 1){
-        filterContainer.style.display = 'inline-block';
-    }else{
-        filterContainer.style.display = 'none';
-    }
+    filterContainer.style.display = 'inline-block';
     
     let assetHeaders;
     if (maxAssets === 1) {
@@ -315,15 +310,15 @@ function renderTable(data, maxAssets) {
     if (hasBrenRenProducts) {
         detailsChildren.push("Capped / Uncapped");
     }
-    detailsChildren.push("Buffer Threshold / KI Barrier", "Barrier/Buffer Level", "Frequency", "Non-call period", "Interest Barrier vs KI");
+    detailsChildren.push("Buffer / Barrier", "Barrier/Buffer Level", "Interest Barrier vs KI");
 
     headerStructure = [
         { title: "Prod CUSIP" }, { title: "ISIN" },
         { title: "Underlying", children: ["Asset Type", ...assetHeaders] },
         { title: "Product Details", children: ["Product Type", "Client", "Tenor"] },
         { title: "Coupons", children: ["Frequency", "Barrier Level", "Memory"] },
-        { title: "Details", children: ["Upside Cap", "Upside Leverage", "Buffer Threshold / KI Barrier", "Barrier/Buffer Level", "Interest Barrier vs KI"] },
-        { title: "Call", children: ["Frequency", "Non-call period"] },
+        { title: "CALL", children: ["Frequency", "Non-call period"] },
+        { title: "Details", children: detailsChildren },
         { title: "DATES IN BOOKINGS", children: ["Strike", "Pricing", "Maturity", "Valuation", "Early Strike"] },
         { title: "Doc Type", children: ["Term Sheet", "Final PS", "Fact Sheet"] }
     ];
@@ -338,6 +333,7 @@ function renderTable(data, maxAssets) {
         if (children) children.forEach(child => (htmlTable += `<th>${child}</th>`));
     });
     htmlTable += "</tr></thead><tbody>";
+    
     data.forEach(row => {
         htmlTable += `<tr data-product-type="${row.productType || ''}">`;
         htmlTable += `<td>${row.prodCusip || ""}</td>`;
@@ -349,9 +345,14 @@ function renderTable(data, maxAssets) {
         htmlTable += `<td>${row.productType || ""}</td>`;
         htmlTable += `<td>${row.productClient || ""}</td>`;
         htmlTable += `<td>${row.productTenor || ""}</td>`;
+        
         htmlTable += `<td>${row.couponFrequency || ""}</td>`;
         htmlTable += `<td>${row.couponBarrierLevel || ""}</td>`;
         htmlTable += `<td>${row.couponMemory || ""}</td>`;
+        
+        htmlTable += `<td>${row.detailFrequency || ""}</td>`;
+        htmlTable += `<td>${row.detailNonCallPerid || ""}</td>`;
+        
         htmlTable += `<td>${row.upsideCap || ""}</td>`;
         htmlTable += `<td>${row.upsideLeverage || ""}</td>`;
         if (hasBrenRenProducts) {
@@ -360,16 +361,17 @@ function renderTable(data, maxAssets) {
         htmlTable += `<td>${row.detailBufferKIBarrier || ""}</td>`;
         htmlTable += `<td>${row.detailBufferBarrierLevel || ""}</td>`;
         htmlTable += `<td>${row.detailInterestBarrierTriggerValue || ""}</td>`;
-        htmlTable += `<td>${row.detailFrequency || ""}</td>`;
-        htmlTable += `<td>${row.detailNonCallPerid || ""}</td>`;
+
         htmlTable += `<td>${row.dateBookingStrikeDate || ""}</td>`;
         htmlTable += `<td>${row.dateBookingPricingDate || ""}</td>`;
         htmlTable += `<td>${row.maturityDate || ""}</td>`;
         htmlTable += `<td>${row.valuationDate || ""}</td>`;
         htmlTable += `<td>${row.earlyStrike || ""}</td>`;
+        
         htmlTable += `<td>${row.termSheet || ""}</td>`;
         htmlTable += `<td>${row.finalPS || ""}</td>`;
         htmlTable += `<td>${row.factSheet || ""}</td>`;
+        
         htmlTable += "</tr>";
     });
     htmlTable += "</tbody></table>";
@@ -400,17 +402,6 @@ function exportExcel() {
 
     const workbook = XLSX.utils.book_new();
 
-    const orderedKeys = [
-        "prodCusip", "prodIsin", "underlyingAssetType", 
-        ...Array.from({ length: maxAssetsForExport }, (_, i) => `asset_${i}`),
-        "productType", "productClient", "productTenor", "couponFrequency",
-        "couponBarrierLevel", "couponMemory", "upsideCap", "upsideLeverage",
-        "detailBufferKIBarrier", "detailBufferBarrierLevel",  "detailInterestBarrierTriggerValue",
-        "detailFrequency", "detailNonCallPerid", "dateBookingStrikeDate",
-        "dateBookingPricingDate", "maturityDate", "valuationDate", "earlyStrike",
-        "termSheet", "finalPS", "factSheet"
-    ];
-
     for (const productType in groupedData) {
         const sheetData = groupedData[productType];
         const sheetName = sanitizeSheetName(productType);
@@ -418,7 +409,6 @@ function exportExcel() {
         const isBrenRenSheet = productType === 'BREN' || productType === 'REN';
         
         let localHeaderStructure = JSON.parse(JSON.stringify(headerStructure));
-        
         if (hasBrenRenProductsInExport && !isBrenRenSheet) {
             const details = localHeaderStructure.find(h => h.title === 'Details');
             if (details) {
@@ -440,21 +430,33 @@ function exportExcel() {
             }
         });
 
+        //A ordem dos dados no array corresponde a ordem dos cabeçalhos.
         const dataAoA = sheetData.map(row => {
             const rowAsArray = [];
+            // UNDERLYING
             rowAsArray.push(row.prodCusip, row.prodIsin, row.underlyingAssetType);
             for (let i = 0; i < maxAssetsForExport; i++) {
                 rowAsArray.push(row.assets[i] || "");
             }
+            // PRODUCT DETAILS
+            rowAsArray.push(row.productType, row.productClient, row.productTenor);
+            // COUPONS
+            rowAsArray.push(row.couponFrequency, row.couponBarrierLevel, row.couponMemory);
+            // CALL
+            rowAsArray.push(row.detailFrequency, row.detailNonCallPerid);
+            // DETAILS
+            rowAsArray.push(row.upsideCap, row.upsideLeverage);
+            if (hasBrenRenProductsInExport) {
+                rowAsArray.push(row.detailCappedUncapped);
+            }
+            rowAsArray.push(row.detailBufferKIBarrier, row.detailBufferBarrierLevel, row.detailInterestBarrierTriggerValue);
+            // DATES IN BOOKINGS
             rowAsArray.push(
-                row.productType, row.productClient, row.productTenor, row.couponFrequency,
-                row.couponBarrierLevel, row.couponMemory, row.upsideCap, row.upsideLeverage,
-                row.detailBufferKIBarrier, row.detailBufferBarrierLevel, row.detailInterestBarrierTriggerValue,
-                row.detailFrequency, row.detailNonCallPerid, row.dateBookingStrikeDate,
-                row.dateBookingPricingDate, row.maturityDate, row.valuationDate, row.earlyStrike,
-                row.termSheet, row.finalPS, row.factSheet
-            ];
-            rowAsArray.push(...remainingData);
+                row.dateBookingStrikeDate, row.dateBookingPricingDate, row.maturityDate, 
+                row.valuationDate, row.earlyStrike
+            );
+            // DOC TYPE
+            rowAsArray.push(row.termSheet, row.finalPS, row.factSheet);
             
             return rowAsArray;
         });
