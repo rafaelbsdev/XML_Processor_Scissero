@@ -112,6 +112,7 @@ const getEarlyStrike = (xmlNode) => {
     const pricingRaw = findFirstContent(xmlNode, ["securitized > issuance > clientOrderTradeDate"]);
     return strikeRaw && pricingRaw && strikeRaw !== pricingRaw ? "Y" : "N";
 };
+
 const detectClient = (xmlNode) => {
     const cp = findFirstContent(xmlNode, ["counterparty > name"]);
     const dealer = findFirstContent(xmlNode, ["dealer > name"]);
@@ -430,34 +431,26 @@ function exportExcel() {
             }
         });
 
-        //A ordem dos dados no array corresponde a ordem dos cabeçalhos.
         const dataAoA = sheetData.map(row => {
             const rowAsArray = [];
-            // UNDERLYING
             rowAsArray.push(row.prodCusip, row.prodIsin, row.underlyingAssetType);
             for (let i = 0; i < maxAssetsForExport; i++) {
                 rowAsArray.push(row.assets[i] || "");
             }
-            // PRODUCT DETAILS
-            rowAsArray.push(row.productType, row.productClient, row.productTenor);
-            // COUPONS
-            rowAsArray.push(row.couponFrequency, row.couponBarrierLevel, row.couponMemory);
-            // CALL
+            rowAsArray.push(
+                row.productType, row.productClient, row.productTenor, row.couponFrequency,
+                row.couponBarrierLevel, row.couponMemory
+            );
             rowAsArray.push(row.detailFrequency, row.detailNonCallPerid);
-            // DETAILS
             rowAsArray.push(row.upsideCap, row.upsideLeverage);
             if (hasBrenRenProductsInExport) {
                 rowAsArray.push(row.detailCappedUncapped);
             }
-            rowAsArray.push(row.detailBufferKIBarrier, row.detailBufferBarrierLevel, row.detailInterestBarrierTriggerValue);
-            // DATES IN BOOKINGS
             rowAsArray.push(
+                row.detailBufferKIBarrier, row.detailBufferBarrierLevel, row.detailInterestBarrierTriggerValue,
                 row.dateBookingStrikeDate, row.dateBookingPricingDate, row.maturityDate, 
-                row.valuationDate, row.earlyStrike
+                row.valuationDate, row.earlyStrike, row.termSheet, row.finalPS, row.factSheet
             );
-            // DOC TYPE
-            rowAsArray.push(row.termSheet, row.finalPS, row.factSheet);
-            
             return rowAsArray;
         });
 
