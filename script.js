@@ -136,7 +136,6 @@ const getDetails = (productNode, type, tradableFormNode) => {
             case "noncall": return "N/A";
         }
     }
-
     const phoenixType = productNode.querySelector("reverseConvertible > issuerCallable") ? "issuerCallable" : "autocallSchedule";
     switch (type) {
         case "strikelevel":
@@ -337,14 +336,11 @@ function renderTable(data, maxAssets) {
         htmlTable += `<td>${row.productType || ""}</td>`;
         htmlTable += `<td>${row.productClient || ""}</td>`;
         htmlTable += `<td>${row.productTenor || ""}</td>`;
-        
         htmlTable += `<td>${row.couponFrequency || ""}</td>`;
         htmlTable += `<td>${row.couponBarrierLevel || ""}</td>`;
         htmlTable += `<td>${row.couponMemory || ""}</td>`;
-        
         htmlTable += `<td>${row.detailFrequency || ""}</td>`;
         htmlTable += `<td>${row.detailNonCallPerid || ""}</td>`;
-        
         htmlTable += `<td>${row.upsideCap || ""}</td>`;
         htmlTable += `<td>${row.upsideLeverage || ""}</td>`;
         if (hasBrenRenProducts) {
@@ -353,17 +349,14 @@ function renderTable(data, maxAssets) {
         htmlTable += `<td>${row.detailBufferKIBarrier || ""}</td>`;
         htmlTable += `<td>${row.detailBufferBarrierLevel || ""}</td>`;
         htmlTable += `<td>${row.detailInterestBarrierTriggerValue || ""}</td>`;
-
         htmlTable += `<td>${row.dateBookingStrikeDate || ""}</td>`;
         htmlTable += `<td>${row.dateBookingPricingDate || ""}</td>`;
         htmlTable += `<td>${row.maturityDate || ""}</td>`;
         htmlTable += `<td>${row.valuationDate || ""}</td>`;
         htmlTable += `<td>${row.earlyStrike || ""}</td>`;
-        
         htmlTable += `<td>${row.termSheet || ""}</td>`;
         htmlTable += `<td>${row.finalPS || ""}</td>`;
         htmlTable += `<td>${row.factSheet || ""}</td>`;
-        
         htmlTable += "</tr>";
     });
     htmlTable += "</tbody></table>";
@@ -383,8 +376,6 @@ function exportExcel() {
         return;
     }
 
-    const hasBrenRenProductsInExport = filteredData.some(row => row.productType === 'BREN' || row.productType === 'REN');
-
     const groupedData = filteredData.reduce((acc, row) => {
         const key = row.productType || 'Uncategorized';
         if (!acc[key]) acc[key] = [];
@@ -401,6 +392,9 @@ function exportExcel() {
         const isBrenRenSheet = productType === 'BREN' || productType === 'REN';
         
         let localHeaderStructure = JSON.parse(JSON.stringify(headerStructure));
+        
+        const hasBrenRenProductsInExport = filteredData.some(row => row.productType === 'BREN' || row.productType === 'REN');
+
         if (hasBrenRenProductsInExport && !isBrenRenSheet) {
             const details = localHeaderStructure.find(h => h.title === 'Details');
             if (details) {
@@ -430,12 +424,13 @@ function exportExcel() {
             }
             rowAsArray.push(
                 row.productType, row.productClient, row.productTenor, row.couponFrequency,
-                row.couponBarrierLevel, row.couponMemory
+                row.couponBarrierLevel, row.couponMemory, row.detailFrequency, row.detailNonCallPerid,
+                row.upsideCap, row.upsideLeverage
             );
-            rowAsArray.push(row.detailFrequency, row.detailNonCallPerid);
-            rowAsArray.push(row.upsideCap, row.upsideLeverage);
-            if (hasBrenRenProductsInExport) {
-                rowAsArray.push(row.detailCappedUncapped);
+            if (isBrenRenSheet || (hasBrenRenProductsInExport && !isBrenRenSheet)) {
+                if(isBrenRenSheet) {
+                    rowAsArray.push(row.detailCappedUncapped);
+                }
             }
             rowAsArray.push(
                 row.detailBufferKIBarrier, row.detailBufferBarrierLevel, row.detailInterestBarrierTriggerValue,
