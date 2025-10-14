@@ -209,7 +209,7 @@ async function previewExtractedXML() {
             const identifier = cusip;
 
             if (!identifier) continue;
-
+            
             const cappedValue = findFirstContent(product, ['bufferedReturnEnhancedNote > capped', 'capped']);
 
             if (productMap.has(identifier)) {
@@ -389,8 +389,10 @@ function exportExcel() {
         const sheetData = groupedData[productType];
         const sheetName = sanitizeSheetName(productType);
         
-        let localHeaderStructure = JSON.parse(JSON.stringify(headerStructure));
         const isBrenRenSheet = productType === 'BREN' || productType === 'REN';
+        
+        let localHeaderStructure = JSON.parse(JSON.stringify(headerStructure));
+        
         if (hasBrenRenProductsInExport && !isBrenRenSheet) {
             const details = localHeaderStructure.find(h => h.title === 'Details');
             if (details) {
@@ -422,15 +424,16 @@ function exportExcel() {
                 row.productType, row.productClient, row.productTenor, row.couponFrequency,
                 row.couponBarrierLevel, row.couponMemory, row.upsideCap, row.upsideLeverage
             );
-            if (hasBrenRenProductsInExport) {
+            if (isBrenRenSheet) {
                 rowAsArray.push(row.detailCappedUncapped);
+            } else if (hasBrenRenProductsInExport) {
             }
-            rowAsArray.push(
                 row.detailBufferKIBarrier, row.detailBufferBarrierLevel, row.detailFrequency,
                 row.detailNonCallPerid, row.detailInterestBarrierTriggerValue, row.dateBookingStrikeDate,
                 row.dateBookingPricingDate, row.maturityDate, row.valuationDate, row.earlyStrike,
                 row.termSheet, row.finalPS, row.factSheet
-            );
+            ];
+            rowAsArray.push(...remainingData);
             return rowAsArray;
         });
 
