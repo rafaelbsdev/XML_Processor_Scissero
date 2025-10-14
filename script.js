@@ -385,6 +385,8 @@ function exportExcel() {
 
     const workbook = XLSX.utils.book_new();
 
+    const hasBrenRenProductsInGlobalScope = consolidatedData.some(row => row.productType === 'BREN' || row.productType === 'REN');
+
     for (const productType in groupedData) {
         const sheetData = groupedData[productType];
         const sheetName = sanitizeSheetName(productType);
@@ -393,9 +395,7 @@ function exportExcel() {
         
         let localHeaderStructure = JSON.parse(JSON.stringify(headerStructure));
         
-        const hasBrenRenProductsInExport = filteredData.some(row => row.productType === 'BREN' || row.productType === 'REN');
-
-        if (hasBrenRenProductsInExport && !isBrenRenSheet) {
+        if (hasBrenRenProductsInGlobalScope && !isBrenRenSheet) {
             const details = localHeaderStructure.find(h => h.title === 'Details');
             if (details) {
                 details.children = details.children.filter(c => c !== 'Capped / Uncapped');
@@ -427,11 +427,11 @@ function exportExcel() {
                 row.couponBarrierLevel, row.couponMemory, row.detailFrequency, row.detailNonCallPerid,
                 row.upsideCap, row.upsideLeverage
             );
-            if (isBrenRenSheet || (hasBrenRenProductsInExport && !isBrenRenSheet)) {
-                if(isBrenRenSheet) {
-                    rowAsArray.push(row.detailCappedUncapped);
-                }
+
+            if (hasBrenRenProductsInGlobalScope) {
+                 rowAsArray.push(row.detailCappedUncapped);
             }
+
             rowAsArray.push(
                 row.detailBufferKIBarrier, row.detailBufferBarrierLevel, row.detailInterestBarrierTriggerValue,
                 row.dateBookingStrikeDate, row.dateBookingPricingDate, row.maturityDate, 
