@@ -313,7 +313,8 @@ function renderTable(data, maxAssets) {
         { title: "Underlying", children: ["Asset Type", ...assetHeaders] },
         { title: "Product Details", children: ["Product Type", "Client", "Tenor"] },
         { title: "Coupons", children: ["Frequency", "Barrier Level", "Memory"] },
-        { title: "Details", children: ["Upside Cap", "Upside Leverage", "Buffer Threshold / KI Barrier", "Barrier/Buffer Level", "Frequency", "Non-call period", "Interest Barrier vs KI"] },
+        { title: "Details", children: ["Upside Cap", "Upside Leverage", "Buffer Threshold / KI Barrier", "Barrier/Buffer Level", "Interest Barrier vs KI"] },
+        { title: "Call", children: ["Frequency", "Non-call period"] },
         { title: "DATES IN BOOKINGS", children: ["Strike", "Pricing", "Maturity", "Valuation", "Early Strike"] },
         { title: "Doc Type", children: ["Term Sheet", "Final PS", "Fact Sheet"] }
     ];
@@ -346,9 +347,9 @@ function renderTable(data, maxAssets) {
         htmlTable += `<td>${row.upsideLeverage || ""}</td>`;
         htmlTable += `<td>${row.detailBufferKIBarrier || ""}</td>`;
         htmlTable += `<td>${row.detailBufferBarrierLevel || ""}</td>`;
+        htmlTable += `<td>${row.detailInterestBarrierTriggerValue || ""}</td>`;
         htmlTable += `<td>${row.detailFrequency || ""}</td>`;
         htmlTable += `<td>${row.detailNonCallPerid || ""}</td>`;
-        htmlTable += `<td>${row.detailInterestBarrierTriggerValue || ""}</td>`;
         htmlTable += `<td>${row.dateBookingStrikeDate || ""}</td>`;
         htmlTable += `<td>${row.dateBookingPricingDate || ""}</td>`;
         htmlTable += `<td>${row.maturityDate || ""}</td>`;
@@ -390,8 +391,8 @@ function exportExcel() {
         ...Array.from({ length: maxAssetsForExport }, (_, i) => `asset_${i}`),
         "productType", "productClient", "productTenor", "couponFrequency",
         "couponBarrierLevel", "couponMemory", "upsideCap", "upsideLeverage",
-        "detailBufferKIBarrier", "detailBufferBarrierLevel", "detailFrequency",
-        "detailNonCallPerid", "detailInterestBarrierTriggerValue", "dateBookingStrikeDate",
+        "detailBufferKIBarrier", "detailBufferBarrierLevel",  "detailInterestBarrierTriggerValue",
+        "detailFrequency", "detailNonCallPerid", "dateBookingStrikeDate",
         "dateBookingPricingDate", "maturityDate", "valuationDate", "earlyStrike",
         "termSheet", "finalPS", "factSheet"
     ];
@@ -423,8 +424,8 @@ function exportExcel() {
             rowAsArray.push(
                 row.productType, row.productClient, row.productTenor, row.couponFrequency,
                 row.couponBarrierLevel, row.couponMemory, row.upsideCap, row.upsideLeverage,
-                row.detailBufferKIBarrier, row.detailBufferBarrierLevel, row.detailFrequency,
-                row.detailNonCallPerid, row.detailInterestBarrierTriggerValue, row.dateBookingStrikeDate,
+                row.detailBufferKIBarrier, row.detailBufferBarrierLevel, row.detailInterestBarrierTriggerValue,
+                row.detailFrequency, row.detailNonCallPerid, row.dateBookingStrikeDate,
                 row.dateBookingPricingDate, row.maturityDate, row.valuationDate, row.earlyStrike,
                 row.termSheet, row.finalPS, row.factSheet
             );
