@@ -71,6 +71,7 @@ const getUnderlying = (assetNode, key) => {
         return assets.length === 1 ? `Single ${assetType}` : `${basketType} ${assetType}`;
     }
 };
+
 const getProducts = (productNode, type) => {
     if (type === "tenor") {
         const tenorMonths = findFirstContent(productNode, ["tenor > months"]);
@@ -80,14 +81,17 @@ const getProducts = (productNode, type) => {
     }
     return findFirstContent(productNode, ["bufferedReturnEnhancedNote > productType", "reverseConvertible > description", "productName"]);
 };
+
 const upsideLeverage = (productNode) => {
     const leverage = findFirstContent(productNode, ["bufferedReturnEnhancedNote > upsideLeverage"]);
     return (leverage && `${leverage}X`) || "N/A";
 };
+
 const upsideCap = (productNode) => {
     const cap = findFirstContent(productNode, ["bufferedReturnEnhancedNote > upsideCap"]);
     return (cap && `${cap}%`) || "N/A";
 };
+
 const getCoupon = (productNode, type) => {
     const couponSchedule = productNode.querySelector("reverseConvertible > couponSchedule");
     if (!couponSchedule) return "N/A";
@@ -102,11 +106,13 @@ const getCoupon = (productNode, type) => {
         default: return "N/A";
     }
 };
+
 const getEarlyStrike = (xmlNode) => {
     const strikeRaw = findFirstContent(xmlNode, ["securitized > issuance > prospectusStartDate", "strikeDate > date"]);
     const pricingRaw = findFirstContent(xmlNode, ["securitized > issuance > clientOrderTradeDate"]);
     return strikeRaw && pricingRaw && strikeRaw !== pricingRaw ? "Y" : "N";
 };
+
 const detectClient = (xmlNode) => {
     const cp = findFirstContent(xmlNode, ["counterparty > name"]);
     const dealer = findFirstContent(xmlNode, ["dealer > name"]);
@@ -116,6 +122,7 @@ const detectClient = (xmlNode) => {
     if (blob.includes("bauble") || blob.includes("ubs")) return "UBS";
     return "3P";
 };
+
 const detectXmlType = (xmlNode) => {
     const docType = findFirstContent(xmlNode, ["documentType"]).toUpperCase();
     return {
@@ -124,6 +131,7 @@ const detectXmlType = (xmlNode) => {
         factSheet: docType.includes("FACT_SHEET") ? "Y" : "N",
     };
 };
+
 const getDetails = (productNode, type, tradableFormNode) => {
     const productType = getProducts(productNode);
     if (productType === "BREN" || productType === "REN") {
@@ -162,6 +170,7 @@ const getDetails = (productNode, type, tradableFormNode) => {
             return `Interest Barrier ${comparison} KI Barrier`;
     }
 };
+
 const findIdentifier = (tradableFormNode, type) => {
     const identifiers = tradableFormNode.querySelectorAll('identifiers');
     for (const idNode of identifiers) {
@@ -376,6 +385,8 @@ function exportExcel() {
         return;
     }
 
+    const hasBrenRenProductsInExport = filteredData.some(row => row.productType === 'BREN' || row.productType === 'REN');
+
     const groupedData = filteredData.reduce((acc, row) => {
         const key = row.productType || 'Uncategorized';
         if (!acc[key]) acc[key] = [];
@@ -385,8 +396,6 @@ function exportExcel() {
 
     const workbook = XLSX.utils.book_new();
 
-    const hasBrenRenProductsInGlobalScope = consolidatedData.some(row => row.productType === 'BREN' || row.productType === 'REN');
-
     for (const productType in groupedData) {
         const sheetData = groupedData[productType];
         const sheetName = sanitizeSheetName(productType);
@@ -395,7 +404,7 @@ function exportExcel() {
         
         let localHeaderStructure = JSON.parse(JSON.stringify(headerStructure));
         
-        if (hasBrenRenProductsInGlobalScope && !isBrenRenSheet) {
+        if (hasBrenRenProductsInExport && !isBrenRenSheet) {
             const details = localHeaderStructure.find(h => h.title === 'Details');
             if (details) {
                 details.children = details.children.filter(c => c !== 'Capped / Uncapped');
@@ -428,8 +437,8 @@ function exportExcel() {
                 row.upsideCap, row.upsideLeverage
             );
 
-            if (hasBrenRenProductsInGlobalScope) {
-                 rowAsArray.push(row.detailCappedUncapped);
+            if (isBrenRenSheet) {
+                rowAsArray.push(row.detailCappedUncapped);
             }
 
             rowAsArray.push(
