@@ -428,12 +428,14 @@ function exportExcel() {
                 rowAsArray.push(row.detailCappedUncapped);
             } else if (hasBrenRenProductsInExport) {
             }
+            const remainingData = [
                 row.detailBufferKIBarrier, row.detailBufferBarrierLevel, row.detailFrequency,
                 row.detailNonCallPerid, row.detailInterestBarrierTriggerValue, row.dateBookingStrikeDate,
                 row.dateBookingPricingDate, row.maturityDate, row.valuationDate, row.earlyStrike,
                 row.termSheet, row.finalPS, row.factSheet
             ];
             rowAsArray.push(...remainingData);
+            
             return rowAsArray;
         });
 
