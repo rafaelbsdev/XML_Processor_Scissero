@@ -67,7 +67,7 @@ button {
 }
 
 .dataTable {
-  max-height: 60vh;
+  max-height: 600px;
   overflow-y: auto;
   overflow-x: auto;
   padding-bottom: 20px;
