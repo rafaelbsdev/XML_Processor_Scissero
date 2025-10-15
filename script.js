@@ -60,6 +60,19 @@ const sanitizeSheetName = (name) => {
     return name.replace(/[\\/*?\[\]:]/g, "").substring(0, 31);
 };
 
+const formatAsPercentage = (value) => {
+    if (!value || value === "N/A" || value === "") {
+        return value;
+    }
+    const num = parseFloat(value);
+    if (isNaN(num)) {
+        return value;
+    }
+
+    return `${Number(num.toFixed(4))}%`;
+};
+
+
 const getUnderlying = (assetNode, key) => {
     const assets = assetNode.querySelectorAll("assets");
     if (typeof key === "number") {
@@ -71,7 +84,6 @@ const getUnderlying = (assetNode, key) => {
         return assets.length === 1 ? `Single ${assetType}` : `${basketType} ${assetType}`;
     }
 };
-
 const getProducts = (productNode, type) => {
     if (type === "tenor") {
         const tenorMonths = findFirstContent(productNode, ["tenor > months"]);
@@ -81,7 +93,6 @@ const getProducts = (productNode, type) => {
     }
     return findFirstContent(productNode, ["bufferedReturnEnhancedNote > productType", "reverseConvertible > description", "productName"]);
 };
-
 const upsideLeverage = (productNode) => {
     const leverage = findFirstContent(productNode, ["bufferedReturnEnhancedNote > upsideLeverage"]);
     return (leverage && `${leverage}X`) || "N/A";
@@ -89,7 +100,7 @@ const upsideLeverage = (productNode) => {
 
 const upsideCap = (productNode) => {
     const cap = findFirstContent(productNode, ["bufferedReturnEnhancedNote > upsideCap"]);
-    return (cap && `${cap}%`) || "N/A";
+    return cap ? formatAsPercentage(cap) : "N/A";
 };
 
 const getCoupon = (productNode, type) => {
@@ -99,20 +110,18 @@ const getCoupon = (productNode, type) => {
         case "frequency": return findFirstContent(couponSchedule, ["frequency"]) || "N/A";
         case "level":
             const level = findFirstContent(couponSchedule, ["coupons > contingentLevelLegal > level", "contigentLevelLegal > level"]);
-            return (level && `${level}%`) || "N/A";
+            return level ? formatAsPercentage(level) : "N/A";
         case "memory":
             const hasMemory = findFirstContent(couponSchedule, ["hasMemory"]);
             return hasMemory ? (hasMemory === "false" ? "N" : "Y") : "N/A";
         default: return "N/A";
     }
 };
-
 const getEarlyStrike = (xmlNode) => {
     const strikeRaw = findFirstContent(xmlNode, ["securitized > issuance > prospectusStartDate", "strikeDate > date"]);
     const pricingRaw = findFirstContent(xmlNode, ["securitized > issuance > clientOrderTradeDate"]);
     return strikeRaw && pricingRaw && strikeRaw !== pricingRaw ? "Y" : "N";
 };
-
 const detectClient = (xmlNode) => {
     const cp = findFirstContent(xmlNode, ["counterparty > name"]);
     const dealer = findFirstContent(xmlNode, ["dealer > name"]);
@@ -122,7 +131,6 @@ const detectClient = (xmlNode) => {
     if (blob.includes("bauble") || blob.includes("ubs")) return "UBS";
     return "3P";
 };
-
 const detectXmlType = (xmlNode) => {
     const docType = findFirstContent(xmlNode, ["documentType"]).toUpperCase();
     return {
@@ -139,7 +147,7 @@ const getDetails = (productNode, type, tradableFormNode) => {
             case "strikelevel": return "Buffer";
             case "bufferlevel":
                 const buffer = findFirstContent(productNode, ["bufferedReturnEnhancedNote > buffer"]);
-                return buffer ? `${100 - parseFloat(buffer)}%` : "";
+                return buffer ? formatAsPercentage(100 - parseFloat(buffer)) : "";
             case "frequency": return "At Maturity";
             case "noncall": return "N/A";
         }
@@ -147,11 +155,21 @@ const getDetails = (productNode, type, tradableFormNode) => {
     const phoenixType = productNode.querySelector("reverseConvertible > issuerCallable") ? "issuerCallable" : "autocallSchedule";
     switch (type) {
         case "strikelevel":
-            const strikelevel = findFirstContent(productNode, ["reverseConvertible > strike > level"]);
-            return parseFloat(strikelevel) < 100 ? "Buffer" : "KI Barrier";
+            const strikelevelValue = findFirstContent(productNode, ["reverseConvertible > strike > level"]);
+            return parseFloat(strikelevelValue) < 100 ? "Buffer" : "KI Barrier";
+
         case "bufferlevel":
-             const kiBarrier = findFirstContent(productNode, ["knockInBarrier > barrierSchedule > barrierLevel > level"]);
-             return kiBarrier ? `${kiBarrier}%` : "";
+            const strikelevel = findFirstContent(productNode, ["reverseConvertible > strike > level"]);
+            const isBuffer = parseFloat(strikelevel) < 100;
+
+            if (isBuffer) {
+                const bufferLevel = findFirstContent(productNode, ["reverseConvertible > buffer > level"]);
+                return formatAsPercentage(bufferLevel);
+            } else {
+                const kiBarrier = findFirstContent(productNode, ["knockInBarrier > barrierSchedule > barrierLevel > level"]);
+                return formatAsPercentage(kiBarrier);
+            }
+        
         case "frequency": return findFirstContent(productNode, [`reverseConvertible > ${phoenixType} > barrierSchedule > frequency`]);
         case "noncall":
             const issueDateStr = findFirstContent(tradableFormNode, ["securitized > issuance > issueDate"]);
@@ -170,7 +188,6 @@ const getDetails = (productNode, type, tradableFormNode) => {
             return `Interest Barrier ${comparison} KI Barrier`;
     }
 };
-
 const findIdentifier = (tradableFormNode, type) => {
     const identifiers = tradableFormNode.querySelectorAll('identifiers');
     for (const idNode of identifiers) {
@@ -243,11 +260,11 @@ async function previewExtractedXML() {
                     detailCappedUncapped: (product_type === 'BREN' || product_type === 'REN')
                         ? (cappedValue === 'true' ? 'Capped' : (cappedValue === 'false' ? 'Uncapped' : ''))
                         : '',
-                    detailBufferKIBarrier: getDetails(product, "strikelevel"),
-                    detailBufferBarrierLevel: getDetails(product, "bufferlevel"),
+                    detailBufferKIBarrier: getDetails(product, "strikelevel", tradableForm),
+                    detailBufferBarrierLevel: getDetails(product, "bufferlevel", tradableForm),
                     detailFrequency: getDetails(product, "frequency", tradableForm),
                     detailNonCallPerid: getDetails(product, "noncall", tradableForm),
-                    detailInterestBarrierTriggerValue: getDetails(product),
+                    detailInterestBarrierTriggerValue: getDetails(product, "default", tradableForm),
                     dateBookingStrikeDate: setDate(findFirstContent(xmlNode, ["securitized > issuance > prospectusStartDate", "strikeDate > date"])),
                     dateBookingPricingDate: setDate(findFirstContent(tradableForm, ["securitized > issuance > clientOrderTradeDate"])),
                     maturityDate: setDate(findFirstContent(product, ["maturity > date", "redemptionDate", "settlementDate"])),
@@ -436,11 +453,11 @@ function exportExcel() {
                 row.couponBarrierLevel, row.couponMemory, row.detailFrequency, row.detailNonCallPerid,
                 row.upsideCap, row.upsideLeverage
             );
-
+            
             if (isBrenRenSheet) {
                 rowAsArray.push(row.detailCappedUncapped);
             }
-
+            
             rowAsArray.push(
                 row.detailBufferKIBarrier, row.detailBufferBarrierLevel, row.detailInterestBarrierTriggerValue,
                 row.dateBookingStrikeDate, row.dateBookingPricingDate, row.maturityDate, 
