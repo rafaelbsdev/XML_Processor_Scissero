@@ -1,4 +1,3 @@
-// --- SELETORES DE ELEMENTOS DOM ---
 const inputXML = document.querySelector(".inputXML");
 const message = document.querySelector(".message");
 const dataTable = document.querySelector(".dataTable");
@@ -6,12 +5,10 @@ const btnPreview = document.querySelector(".btnPreviewData");
 const btnExport = document.querySelector(".btnExportExcel");
 const productTypeFilter = document.getElementById('productTypeFilter');
 
-// Variáveis globais para armazenar os dados e a estrutura do cabeçalho
 let consolidatedData = [];
 let headerStructure = [];
 let maxAssetsForExport = 0;
 
-// --- EVENT LISTENERS ---
 btnPreview.addEventListener("click", previewExtractedXML);
 btnExport.addEventListener("click", exportExcel);
 
