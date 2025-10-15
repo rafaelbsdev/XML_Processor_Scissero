@@ -68,10 +68,8 @@ const formatAsPercentage = (value) => {
     if (isNaN(num)) {
         return value;
     }
-
     return `${Number(num.toFixed(4))}%`;
 };
-
 
 const getUnderlying = (assetNode, key) => {
     const assets = assetNode.querySelectorAll("assets");
@@ -97,12 +95,10 @@ const upsideLeverage = (productNode) => {
     const leverage = findFirstContent(productNode, ["bufferedReturnEnhancedNote > upsideLeverage"]);
     return (leverage && `${leverage}X`) || "N/A";
 };
-
 const upsideCap = (productNode) => {
     const cap = findFirstContent(productNode, ["bufferedReturnEnhancedNote > upsideCap"]);
     return cap ? formatAsPercentage(cap) : "N/A";
 };
-
 const getCoupon = (productNode, type) => {
     const couponSchedule = productNode.querySelector("reverseConvertible > couponSchedule");
     if (!couponSchedule) return "N/A";
@@ -139,7 +135,6 @@ const detectXmlType = (xmlNode) => {
         factSheet: docType.includes("FACT_SHEET") ? "Y" : "N",
     };
 };
-
 const getDetails = (productNode, type, tradableFormNode) => {
     const productType = getProducts(productNode);
     if (productType === "BREN" || productType === "REN") {
@@ -180,12 +175,28 @@ const getDetails = (productNode, type, tradableFormNode) => {
             if (isNaN(issueDate.getTime()) || isNaN(firstCallDate.getTime())) return "";
             const months = (firstCallDate.getFullYear() - issueDate.getFullYear()) * 12 + (firstCallDate.getMonth() - issueDate.getMonth());
             return months > 0 ? `${months}M` : "";
+        
         default:
-            const barrierLevel = parseFloat(findFirstContent(productNode, ["reverseConvertible > couponSchedule > contigentLevelLegal > level"]));
-            const kiLevel = parseFloat(findFirstContent(productNode, ["knockInBarrier > barrierSchedule > barrierLevel > level"]));
-            if (isNaN(barrierLevel) || isNaN(kiLevel)) return "N/A";
-            const comparison = barrierLevel > kiLevel ? ">" : barrierLevel < kiLevel ? "<" : "=";
-            return `Interest Barrier ${comparison} KI Barrier`;
+            const interestLevel = parseFloat(findFirstContent(productNode, ["reverseConvertible > couponSchedule > contigentLevelLegal > level"]));
+            
+            const strikeForType = findFirstContent(productNode, ["reverseConvertible > strike > level"]);
+            const isBufferType = parseFloat(strikeForType) < 100;
+
+            let comparisonLevel;
+            let comparisonType;
+
+            if (isBufferType) {
+                comparisonLevel = parseFloat(findFirstContent(productNode, ["reverseConvertible > buffer > level"]));
+                comparisonType = 'Buffer';
+            } else {
+                comparisonLevel = parseFloat(findFirstContent(productNode, ["knockInBarrier > barrierSchedule > barrierLevel > level"]));
+                comparisonType = 'KI Barrier';
+            }
+
+            if (isNaN(interestLevel) || isNaN(comparisonLevel)) return "N/A";
+
+            const comparison = interestLevel > comparisonLevel ? ">" : interestLevel < comparisonLevel ? "<" : "=";
+            return `Interest Barrier ${comparison} ${comparisonType}`;
     }
 };
 const findIdentifier = (tradableFormNode, type) => {
@@ -327,7 +338,7 @@ function renderTable(data, maxAssets) {
     if (hasBrenRenProducts) {
         detailsChildren.push("Capped / Uncapped");
     }
-    detailsChildren.push("Buffer / Barrier", "Barrier/Buffer Level", "Interest Barrier vs KI");
+    detailsChildren.push("Buffer / Barrier", "Barrier/Buffer Level", "Interest v Barrier/Buffer");
 
     headerStructure = [
         { title: "Prod CUSIP" }, { title: "ISIN" },
