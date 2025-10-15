@@ -1,3 +1,4 @@
+// --- SELETORES DE ELEMENTOS DOM ---
 const inputXML = document.querySelector(".inputXML");
 const message = document.querySelector(".message");
 const dataTable = document.querySelector(".dataTable");
@@ -5,10 +6,12 @@ const btnPreview = document.querySelector(".btnPreviewData");
 const btnExport = document.querySelector(".btnExportExcel");
 const productTypeFilter = document.getElementById('productTypeFilter');
 
+// Variáveis globais para armazenar os dados e a estrutura do cabeçalho
 let consolidatedData = [];
 let headerStructure = [];
 let maxAssetsForExport = 0;
 
+// --- EVENT LISTENERS ---
 btnPreview.addEventListener("click", previewExtractedXML);
 btnExport.addEventListener("click", exportExcel);
 
@@ -57,6 +60,7 @@ const findFirstContent = (node, selectors) => {
 };
 
 const sanitizeSheetName = (name) => {
+    if (!name) return 'Unnamed';
     return name.replace(/[\\/*?\[\]:]/g, "").substring(0, 31);
 };
 
@@ -152,11 +156,9 @@ const getDetails = (productNode, type, tradableFormNode) => {
         case "strikelevel":
             const strikelevelValue = findFirstContent(productNode, ["reverseConvertible > strike > level"]);
             return parseFloat(strikelevelValue) < 100 ? "Buffer" : "KI Barrier";
-
         case "bufferlevel":
             const strikelevel = findFirstContent(productNode, ["reverseConvertible > strike > level"]);
             const isBuffer = parseFloat(strikelevel) < 100;
-
             if (isBuffer) {
                 const bufferLevel = findFirstContent(productNode, ["reverseConvertible > buffer > level"]);
                 return formatAsPercentage(bufferLevel);
@@ -164,7 +166,6 @@ const getDetails = (productNode, type, tradableFormNode) => {
                 const kiBarrier = findFirstContent(productNode, ["knockInBarrier > barrierSchedule > barrierLevel > level"]);
                 return formatAsPercentage(kiBarrier);
             }
-        
         case "frequency": return findFirstContent(productNode, [`reverseConvertible > ${phoenixType} > barrierSchedule > frequency`]);
         case "noncall":
             const issueDateStr = findFirstContent(tradableFormNode, ["securitized > issuance > issueDate"]);
@@ -175,16 +176,12 @@ const getDetails = (productNode, type, tradableFormNode) => {
             if (isNaN(issueDate.getTime()) || isNaN(firstCallDate.getTime())) return "";
             const months = (firstCallDate.getFullYear() - issueDate.getFullYear()) * 12 + (firstCallDate.getMonth() - issueDate.getMonth());
             return months > 0 ? `${months}M` : "";
-        
         default:
             const interestLevel = parseFloat(findFirstContent(productNode, ["reverseConvertible > couponSchedule > contigentLevelLegal > level"]));
-            
             const strikeForType = findFirstContent(productNode, ["reverseConvertible > strike > level"]);
             const isBufferType = parseFloat(strikeForType) < 100;
-
             let comparisonLevel;
             let comparisonType;
-
             if (isBufferType) {
                 comparisonLevel = parseFloat(findFirstContent(productNode, ["reverseConvertible > buffer > level"]));
                 comparisonType = 'Buffer';
@@ -192,9 +189,7 @@ const getDetails = (productNode, type, tradableFormNode) => {
                 comparisonLevel = parseFloat(findFirstContent(productNode, ["knockInBarrier > barrierSchedule > barrierLevel > level"]));
                 comparisonType = 'KI Barrier';
             }
-
             if (isNaN(interestLevel) || isNaN(comparisonLevel)) return "N/A";
-
             const comparison = interestLevel > comparisonLevel ? ">" : interestLevel < comparisonLevel ? "<" : "=";
             return `Interest Barrier ${comparison} ${comparisonType}`;
     }
@@ -413,8 +408,6 @@ function exportExcel() {
         return;
     }
 
-    const hasBrenRenProductsInExport = filteredData.some(row => row.productType === 'BREN' || row.productType === 'REN');
-
     const groupedData = filteredData.reduce((acc, row) => {
         const key = row.productType || 'Uncategorized';
         if (!acc[key]) acc[key] = [];
@@ -430,14 +423,23 @@ function exportExcel() {
         
         const isBrenRenSheet = productType === 'BREN' || productType === 'REN';
         
-        let localHeaderStructure = JSON.parse(JSON.stringify(headerStructure));
-        
-        if (hasBrenRenProductsInExport && !isBrenRenSheet) {
-            const details = localHeaderStructure.find(h => h.title === 'Details');
-            if (details) {
-                details.children = details.children.filter(c => c !== 'Capped / Uncapped');
-            }
+        const assetHeaders = maxAssetsForExport === 1 ? ["Asset"] : Array.from({ length: maxAssetsForExport }, (_, i) => `Asset ${i + 1}`);
+        const detailsChildren = ["Upside Cap", "Upside Leverage"];
+        if (isBrenRenSheet) {
+            detailsChildren.push("Capped / Uncapped");
         }
+        detailsChildren.push("Buffer / Barrier", "Barrier/Buffer Level", "Interest v Barrier/Buffer");
+
+        const localHeaderStructure = [
+            { title: "Prod CUSIP" }, { title: "ISIN" },
+            { title: "Underlying", children: ["Asset Type", ...assetHeaders] },
+            { title: "Product Details", children: ["Product Type", "Client", "Tenor"] },
+            { title: "Coupons", children: ["Frequency", "Barrier Level", "Memory"] },
+            { title: "CALL", children: ["Frequency", "Non-call period"] },
+            { title: "Details", children: detailsChildren },
+            { title: "DATES IN BOOKINGS", children: ["Strike", "Pricing", "Maturity", "Valuation", "Early Strike"] },
+            { title: "Doc Type", children: ["Term Sheet", "Final PS", "Fact Sheet"] }
+        ];
         
         const headerRow1 = [];
         const headerRow2 = [];
@@ -445,9 +447,7 @@ function exportExcel() {
             headerRow1.push(h.title.toUpperCase());
             if (h.children) {
                 headerRow2.push(...h.children);
-                for (let i = 1; i < h.children.length; i++) {
-                    headerRow1.push(null);
-                }
+                for (let i = 1; i < h.children.length; i++) headerRow1.push(null);
             } else {
                 headerRow2.push(null);
             }
@@ -456,19 +456,13 @@ function exportExcel() {
         const dataAoA = sheetData.map(row => {
             const rowAsArray = [];
             rowAsArray.push(row.prodCusip, row.prodIsin, row.underlyingAssetType);
-            for (let i = 0; i < maxAssetsForExport; i++) {
-                rowAsArray.push(row.assets[i] || "");
-            }
+            for (let i = 0; i < maxAssetsForExport; i++) rowAsArray.push(row.assets[i] || "");
             rowAsArray.push(
                 row.productType, row.productClient, row.productTenor, row.couponFrequency,
                 row.couponBarrierLevel, row.couponMemory, row.detailFrequency, row.detailNonCallPerid,
                 row.upsideCap, row.upsideLeverage
             );
-            
-            if (isBrenRenSheet) {
-                rowAsArray.push(row.detailCappedUncapped);
-            }
-            
+            if (isBrenRenSheet) rowAsArray.push(row.detailCappedUncapped);
             rowAsArray.push(
                 row.detailBufferKIBarrier, row.detailBufferBarrierLevel, row.detailInterestBarrierTriggerValue,
                 row.dateBookingStrikeDate, row.dateBookingPricingDate, row.maturityDate, 
@@ -483,9 +477,7 @@ function exportExcel() {
         let colIndex = 0;
         localHeaderStructure.forEach(header => {
             if (header.children) {
-                if (header.children.length > 1) {
-                    merges.push({ s: { r: 0, c: colIndex }, e: { r: 0, c: colIndex + header.children.length - 1 } });
-                }
+                if (header.children.length > 1) merges.push({ s: { r: 0, c: colIndex }, e: { r: 0, c: colIndex + header.children.length - 1 } });
                 colIndex += header.children.length;
             } else {
                 merges.push({ s: { r: 0, c: colIndex }, e: { r: 1, c: colIndex } });
